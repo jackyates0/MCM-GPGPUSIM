@@ -1975,18 +1975,26 @@ void gpgpu_sim::cycle() {
     for (unsigned i = 0; i < m_shader_config->n_simt_clusters; i++)
       m_cluster[i]->icnt_cycle();
   }
+  // responsible for transferring memory requests from memory sub-partitions
+  // back to ICNT
+  // so they can be sent to the shader cores/ SMS
   unsigned partiton_replys_in_parallel_per_cycle = 0;
   if (clock_mask & ICNT) {
     // pop from memory controller to interconnect
     for (unsigned i = 0; i < m_memory_config->m_n_mem_sub_partition; i++) {
       mem_fetch *mf = m_memory_sub_partition[i]->top();
       if (mf) {
+        // write operations normally don't need to return data up while reads do
         unsigned response_size =
             mf->get_is_write() ? mf->get_ctrl_size() : mf->size();
+        // do we have enough space on icnt buffer to send  mem response
         if (::icnt_has_buffer(m_shader_config->mem2device(i), response_size)) {
           // if (!mf->get_is_write())
           mf->set_return_timestamp(gpu_sim_cycle + gpu_tot_sim_cycle);
+          // set status to in icnt to sm
           mf->set_status(IN_ICNT_TO_SHADER, gpu_sim_cycle + gpu_tot_sim_cycle);
+          // Pushes the memory request (mf) into the interconnection network
+          // (ICNT).
           ::icnt_push(m_shader_config->mem2device(i), mf->get_tpc(), mf,
                       response_size);
           m_memory_sub_partition[i]->pop();
@@ -1995,6 +2003,7 @@ void gpgpu_sim::cycle() {
           gpu_stall_icnt2sh++;
         }
       } else {
+        // Removes the request (mf) from the memory sub-partition queue 
         m_memory_sub_partition[i]->pop();
       }
     }
@@ -2024,6 +2033,7 @@ void gpgpu_sim::cycle() {
 
   // L2 operations follow L2 clock domain
   unsigned partiton_reqs_in_parallel_per_cycle = 0;
+  // this is for moving from memory to sm
   if (clock_mask & L2) {
     m_power_stats->pwr_mem_stat->l2_cache_stats[CURRENT_STAT_IDX].clear();
     for (unsigned i = 0; i < m_memory_config->m_n_mem_sub_partition; i++) {
@@ -2034,10 +2044,14 @@ void gpgpu_sim::cycle() {
       if (m_memory_sub_partition[i]->full(SECTOR_CHUNCK_SIZE)) {
         gpu_stall_dramfull++;
       } else {
+        //Retrieves (pop) a memory request from the interconnect network (ICNT).
+        //Uses mem2device(i) to map the memory partition to its corresponding shader core.
         mem_fetch *mf = (mem_fetch *)icnt_pop(m_shader_config->mem2device(i));
+        //Push the Memory Request into the Memory Sub-Partition
         m_memory_sub_partition[i]->push(mf, gpu_sim_cycle + gpu_tot_sim_cycle);
         if (mf) partiton_reqs_in_parallel_per_cycle++;
       }
+      //Execute Cache Cycle for the Memory Sub-Partition 
       m_memory_sub_partition[i]->cache_cycle(gpu_sim_cycle + gpu_tot_sim_cycle);
       if (m_config.g_power_simulation_enabled) {
         m_memory_sub_partition[i]->accumulate_L2cache_stats(
@@ -2092,7 +2106,7 @@ void gpgpu_sim::cycle() {
 
     if (g_interactive_debugger_enabled) gpgpu_debug();
 
-      // McPAT main cycle (interface with McPAT)
+    // McPAT main cycle (interface with McPAT)
 #ifdef GPGPUSIM_POWER_MODEL
     if (m_config.g_power_simulation_enabled) {
       if (m_config.g_power_simulation_mode == 0) {
@@ -2339,7 +2353,7 @@ void sst_gpgpu_sim::SST_cycle() {
   gpu_sim_cycle++;
   if (g_interactive_debugger_enabled) gpgpu_debug();
 
-    // McPAT main cycle (interface with McPAT)
+  // McPAT main cycle (interface with McPAT)
 #ifdef GPGPUSIM_POWER_MODEL
   if (m_config.g_power_simulation_enabled) {
     mcpat_cycle(m_config, getShaderCoreConfig(), m_gpgpusim_wrapper,
