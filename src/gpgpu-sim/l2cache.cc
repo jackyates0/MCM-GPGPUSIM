@@ -263,6 +263,7 @@ void memory_partition_unit::simple_dram_model_cycle() {
         }
         m_dram_latency_queue.pop_front();
       }
+      
     } else {
       this->set_done(mf_return);
       delete mf_return;
