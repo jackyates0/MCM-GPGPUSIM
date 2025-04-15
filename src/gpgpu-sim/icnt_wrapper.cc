@@ -48,6 +48,9 @@ unsigned g_network_mode;
 char* g_network_config_filename;
 
 struct inct_config g_inct_config;
+// mcm l2 dram icnt
+struct inct_config dram_l2_inct_config;
+InterconnectInterface* dram_l2_inct_interface;
 LocalInterconnect* g_localicnt_interface;
 
 #include "../option_parser.h"
@@ -55,8 +58,13 @@ LocalInterconnect* g_localicnt_interface;
 // Wrapper to intersim2 to accompany old icnt_wrapper
 // TODO: use delegate/boost/c++11<funtion> instead
 
-static void intersim2_create(unsigned int n_shader, unsigned int n_mem) {
-  g_icnt_interface->CreateInterconnect(n_shader, n_mem);
+static void intersim2_create(unsigned int n_shader, unsigned int n_mem,
+                             bool l2DramIcnt) {
+  if (l2DramIcnt) {
+    dram_l2_inct_interface->CreateInterconnect(n_shader, n_mem);
+  } else {
+    g_icnt_interface->CreateInterconnect(n_shader, n_mem);
+  }
 }
 
 static void intersim2_init() { g_icnt_interface->Init(); }
@@ -66,12 +74,20 @@ static bool intersim2_has_buffer(unsigned input, unsigned int size) {
 }
 
 static void intersim2_push(unsigned input, unsigned output, void* data,
-                           unsigned int size) {
-  g_icnt_interface->Push(input, output, data, size);
+                           unsigned int size, bool l2DramIcnt) {
+  if (l2DramIcnt) {
+    dram_l2_inct_interface->Push(input, output, data, size);
+  } else {
+    g_icnt_interface->Push(input, output, data, size);
+  }
 }
 
-static void* intersim2_pop(unsigned output) {
-  return g_icnt_interface->Pop(output);
+static void* intersim2_pop(unsigned output, bool l2DramIcnt) {
+  if (l2DramIcnt) {
+    return dram_l2_inct_interface->Pop(output);
+  } else {
+    return g_icnt_interface->Pop(output);
+  }
 }
 
 static void intersim2_transfer() { g_icnt_interface->Advance(); }
@@ -94,8 +110,8 @@ static unsigned intersim2_get_flit_size() {
 
 //////////////////////////////////////////////////////
 
-static void LocalInterconnect_create(unsigned int n_shader,
-                                     unsigned int n_mem) {
+static void LocalInterconnect_create(unsigned int n_shader, unsigned int n_mem,
+                                     bool l2DramIcnt) {
   g_localicnt_interface->CreateInterconnect(n_shader, n_mem);
 }
 
@@ -106,11 +122,11 @@ static bool LocalInterconnect_has_buffer(unsigned input, unsigned int size) {
 }
 
 static void LocalInterconnect_push(unsigned input, unsigned output, void* data,
-                                   unsigned int size) {
+                                   unsigned int size, bool l2DramIcnt) {
   g_localicnt_interface->Push(input, output, data, size);
 }
 
-static void* LocalInterconnect_pop(unsigned output) {
+static void* LocalInterconnect_pop(unsigned output, bool l2DramIcnt) {
   return g_localicnt_interface->Pop(output);
 }
 
@@ -165,6 +181,8 @@ void icnt_wrapper_init() {
     case INTERSIM:
       // FIXME: delete the object: may add icnt_done wrapper
       g_icnt_interface = InterconnectInterface::New(g_network_config_filename);
+      dram_l2_inct_interface =
+          InterconnectInterface::New(g_network_config_filename);
       icnt_create = intersim2_create;
       icnt_init = intersim2_init;
       icnt_has_buffer = intersim2_has_buffer;

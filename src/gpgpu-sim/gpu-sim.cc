@@ -1033,7 +1033,7 @@ gpgpu_sim::gpgpu_sim(const gpgpu_sim_config &config, gpgpu_context *ctx)
 
     icnt_wrapper_init();
     icnt_create(m_shader_config->n_simt_clusters,
-                m_memory_config->m_n_mem_sub_partition);
+                m_memory_config->m_n_mem_sub_partition, false);
   }
   time_vector_create(NUM_MEM_REQ_STAT);
   fprintf(stdout,
@@ -1996,14 +1996,14 @@ void gpgpu_sim::cycle() {
           // Pushes the memory request (mf) into the interconnection network
           // (ICNT).
           ::icnt_push(m_shader_config->mem2device(i), mf->get_tpc(), mf,
-                      response_size);
+                      response_size, false);
           m_memory_sub_partition[i]->pop();
           partiton_replys_in_parallel_per_cycle++;
         } else {
           gpu_stall_icnt2sh++;
         }
       } else {
-        // Removes the request (mf) from the memory sub-partition queue 
+        // Removes the request (mf) from the memory sub-partition queue
         m_memory_sub_partition[i]->pop();
       }
     }
@@ -2044,14 +2044,16 @@ void gpgpu_sim::cycle() {
       if (m_memory_sub_partition[i]->full(SECTOR_CHUNCK_SIZE)) {
         gpu_stall_dramfull++;
       } else {
-        //Retrieves (pop) a memory request from the interconnect network (ICNT).
-        //Uses mem2device(i) to map the memory partition to its corresponding shader core.
-        mem_fetch *mf = (mem_fetch *)icnt_pop(m_shader_config->mem2device(i));
-        //Push the Memory Request into the Memory Sub-Partition
+        // Retrieves (pop) a memory request from the interconnect network
+        // (ICNT). Uses mem2device(i) to map the memory partition to its
+        // corresponding shader core.
+        mem_fetch *mf =
+            (mem_fetch *)icnt_pop(m_shader_config->mem2device(i), false);
+        // Push the Memory Request into the Memory Sub-Partition
         m_memory_sub_partition[i]->push(mf, gpu_sim_cycle + gpu_tot_sim_cycle);
         if (mf) partiton_reqs_in_parallel_per_cycle++;
       }
-      //Execute Cache Cycle for the Memory Sub-Partition 
+      // Execute Cache Cycle for the Memory Sub-Partition
       m_memory_sub_partition[i]->cache_cycle(gpu_sim_cycle + gpu_tot_sim_cycle);
       if (m_config.g_power_simulation_enabled) {
         m_memory_sub_partition[i]->accumulate_L2cache_stats(

@@ -4621,10 +4621,10 @@ void simt_core_cluster::icnt_inject_request_packet(class mem_fetch *mf) {
                  m_gpu->gpu_sim_cycle + m_gpu->gpu_tot_sim_cycle);
   if (!mf->get_is_write() && !mf->isatomic())
     ::icnt_push(m_cluster_id, m_config->mem2device(destination), (void *)mf,
-                mf->get_ctrl_size());
+                mf->get_ctrl_size(), false);
   else
     ::icnt_push(m_cluster_id, m_config->mem2device(destination), (void *)mf,
-                mf->size());
+                mf->size(), false);
 }
 
 void simt_core_cluster::update_icnt_stats(class mem_fetch *mf) {
@@ -4729,7 +4729,7 @@ void simt_core_cluster::icnt_cycle() {
     }
   }
   if (m_response_fifo.size() < m_config->n_simt_ejection_buffer_size) {
-    mem_fetch *mf = (mem_fetch *)::icnt_pop(m_cluster_id);
+    mem_fetch *mf = (mem_fetch *)::icnt_pop(m_cluster_id, false);
     if (!mf) return;
     assert(mf->get_tpc() == m_cluster_id);
     assert(mf->get_type() == READ_REPLY || mf->get_type() == WRITE_ACK);

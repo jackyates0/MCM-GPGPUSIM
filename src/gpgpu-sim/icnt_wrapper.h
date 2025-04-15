@@ -33,12 +33,13 @@
 
 // functional interface to the interconnect
 
-typedef void (*icnt_create_p)(unsigned n_shader, unsigned n_mem);
+typedef void (*icnt_create_p)(unsigned n_shader, unsigned n_mem,
+                              bool l2dramICNT);
 typedef void (*icnt_init_p)();
 typedef bool (*icnt_has_buffer_p)(unsigned input, unsigned int size);
 typedef void (*icnt_push_p)(unsigned input, unsigned output, void* data,
-                            unsigned int size);
-typedef void* (*icnt_pop_p)(unsigned output);
+                            unsigned int size, bool l2dramICNT);
+typedef void* (*icnt_pop_p)(unsigned output, bool l2dramICNT);
 typedef void (*icnt_transfer_p)();
 typedef bool (*icnt_busy_p)();
 typedef void (*icnt_drain_p)();
