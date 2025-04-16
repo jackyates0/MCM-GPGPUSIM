@@ -52,6 +52,7 @@ struct inct_config g_inct_config;
 struct inct_config dram_l2_inct_config;
 InterconnectInterface* dram_l2_inct_interface;
 LocalInterconnect* g_localicnt_interface;
+LocalInterconnect* g_dram_l2_localicnt_interface;
 
 #include "../option_parser.h"
 
@@ -122,23 +123,44 @@ static unsigned intersim2_get_flit_size() {
 
 static void LocalInterconnect_create(unsigned int n_shader, unsigned int n_mem,
                                      bool l2DramIcnt) {
-  g_localicnt_interface->CreateInterconnect(n_shader, n_mem);
+  if (!l2DramIcnt) {
+    g_localicnt_interface =
+        LocalInterconnect::New(g_inct_config /* your normal LUT config */);
+    g_localicnt_interface->CreateInterconnect(n_shader, n_mem);
+
+  } else {
+    g_dram_l2_localicnt_interface = +LocalInterconnect::New(
+        g_inct_config /* maybe same or separate config */);
+    g_dram_l2_localicnt_interface->CreateInterconnect(n_shader, n_mem);
+  }
 }
 
-static void LocalInterconnect_init() { g_localicnt_interface->Init(); }
+static void LocalInterconnect_init() {
+  g_localicnt_interface->Init();
+  g_dram_l2_localicnt_interface->Init();
+}
 
 static bool LocalInterconnect_has_buffer(unsigned input, unsigned int size,
                                          bool l2DramInct) {
-  return g_localicnt_interface->HasBuffer(input, size);
+  if (!l2DramInct)
+    return g_localicnt_interface->HasBuffer(input, size);
+  else
+    return g_dram_l2_localicnt_interface->HasBuffer(input, size);
 }
 
 static void LocalInterconnect_push(unsigned input, unsigned output, void* data,
                                    unsigned int size, bool l2DramIcnt) {
-  g_localicnt_interface->Push(input, output, data, size);
+  if (!l2DramIcnt)
+    g_localicnt_interface->Push(input, output, data, size);
+  else
+    g_dram_l2_localicnt_interface->Push(input, output, data, size);
 }
 
 static void* LocalInterconnect_pop(unsigned output, bool l2DramIcnt) {
-  return g_localicnt_interface->Pop(output);
+  if (!l2DramIcnt)
+    return g_localicnt_interface->Pop(output);
+  else
+    return g_dram_l2_localicnt_interface->Pop(output);
 }
 
 static void LocalInterconnect_transfer() { g_localicnt_interface->Advance(); }
@@ -208,6 +230,7 @@ void icnt_wrapper_init() {
       break;
     case LOCAL_XBAR:
       g_localicnt_interface = LocalInterconnect::New(g_inct_config);
+      g_dram_l2_localicnt_interface = LocalInterconnect::New(g_inct_config);
       icnt_create = LocalInterconnect_create;
       icnt_init = LocalInterconnect_init;
       icnt_has_buffer = LocalInterconnect_has_buffer;
