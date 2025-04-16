@@ -263,7 +263,7 @@ void memory_partition_unit::simple_dram_model_cycle() {
         }
         m_dram_latency_queue.pop_front();
       }
-      
+
     } else {
       this->set_done(mf_return);
       delete mf_return;
@@ -301,6 +301,14 @@ void memory_partition_unit::simple_dram_model_cycle() {
     }
   }
   //}
+}
+void memory_partition_unit::push_to_dram(mem_fetch *mf) {
+  // immediately inject into the DRAM scheduler
+  //
+  // (dram_cycle() will drive it through command queues and timing)
+  mf->set_status(IN_PARTITION_L2_TO_DRAM_QUEUE,
+                 m_gpu->gpu_sim_cycle + m_gpu->gpu_tot_sim_cycle);
+  m_dram->push(mf);
 }
 
 void memory_partition_unit::dram_cycle() {

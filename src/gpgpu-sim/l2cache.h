@@ -91,6 +91,7 @@ class memory_partition_unit {
   void print(FILE *fp) const;
   void handle_memcpy_to_gpu(size_t dst_start_addr, unsigned subpart_id,
                             mem_access_sector_mask_t mask);
+  void push_to_dram(mem_fetch *mf);
 
   class memory_sub_partition *get_sub_partition(int sub_partition_id) {
     return m_sub_partition[sub_partition_id];
@@ -106,9 +107,7 @@ class memory_partition_unit {
 
   unsigned get_mpid() const { return m_id; }
 
-  class gpgpu_sim *get_mgpu() const {
-    return m_gpu;
-  }
+  class gpgpu_sim *get_mgpu() const { return m_gpu; }
 
  private:
   unsigned m_id;

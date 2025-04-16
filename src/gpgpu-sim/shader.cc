@@ -4585,7 +4585,7 @@ void simt_core_cluster::cache_invalidate() {
 bool simt_core_cluster::icnt_injection_buffer_full(unsigned size, bool write) {
   unsigned request_size = size;
   if (!write) request_size = READ_PACKET_SIZE;
-  return !::icnt_has_buffer(m_cluster_id, request_size);
+  return !::icnt_has_buffer(m_cluster_id, request_size, false);
 }
 
 bool sst_simt_core_cluster::SST_injection_buffer_full(unsigned size, bool write,

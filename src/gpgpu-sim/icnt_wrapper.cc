@@ -67,9 +67,16 @@ static void intersim2_create(unsigned int n_shader, unsigned int n_mem,
   }
 }
 
-static void intersim2_init() { g_icnt_interface->Init(); }
+static void intersim2_init() {
+  g_icnt_interface->Init();
+  dram_l2_inct_interface->Init();
+}
 
-static bool intersim2_has_buffer(unsigned input, unsigned int size) {
+static bool intersim2_has_buffer(unsigned input, unsigned int size,
+                                 bool l2DramIcnt) {
+  if (l2DramIcnt) {
+    return dram_l2_inct_interface->HasBuffer(input, size);
+  }
   return g_icnt_interface->HasBuffer(input, size);
 }
 
@@ -90,7 +97,10 @@ static void* intersim2_pop(unsigned output, bool l2DramIcnt) {
   }
 }
 
-static void intersim2_transfer() { g_icnt_interface->Advance(); }
+static void intersim2_transfer() {
+  dram_l2_inct_interface->Advance();
+  g_icnt_interface->Advance();
+}
 
 static bool intersim2_busy() { return g_icnt_interface->Busy(); }
 
@@ -117,7 +127,8 @@ static void LocalInterconnect_create(unsigned int n_shader, unsigned int n_mem,
 
 static void LocalInterconnect_init() { g_localicnt_interface->Init(); }
 
-static bool LocalInterconnect_has_buffer(unsigned input, unsigned int size) {
+static bool LocalInterconnect_has_buffer(unsigned input, unsigned int size,
+                                         bool l2DramInct) {
   return g_localicnt_interface->HasBuffer(input, size);
 }
 

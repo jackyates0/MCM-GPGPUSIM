@@ -1034,6 +1034,10 @@ gpgpu_sim::gpgpu_sim(const gpgpu_sim_config &config, gpgpu_context *ctx)
     icnt_wrapper_init();
     icnt_create(m_shader_config->n_simt_clusters,
                 m_memory_config->m_n_mem_sub_partition, false);
+    // one input port per L2 sub‑partition
+    // output one DRAM controller per channel
+    icnt_create(m_memory_config->m_n_mem_sub_partition,
+                m_memory_config->m_n_mem, true);
   }
   time_vector_create(NUM_MEM_REQ_STAT);
   fprintf(stdout,
@@ -1988,7 +1992,8 @@ void gpgpu_sim::cycle() {
         unsigned response_size =
             mf->get_is_write() ? mf->get_ctrl_size() : mf->size();
         // do we have enough space on icnt buffer to send  mem response
-        if (::icnt_has_buffer(m_shader_config->mem2device(i), response_size)) {
+        if (::icnt_has_buffer(m_shader_config->mem2device(i), response_size,
+                              false)) {
           // if (!mf->get_is_write())
           mf->set_return_timestamp(gpu_sim_cycle + gpu_tot_sim_cycle);
           // set status to in icnt to sm
@@ -2000,6 +2005,7 @@ void gpgpu_sim::cycle() {
           m_memory_sub_partition[i]->pop();
           partiton_replys_in_parallel_per_cycle++;
         } else {
+          // need to add some sort of l2 -dram stall counter.
           gpu_stall_icnt2sh++;
         }
       } else {
@@ -2012,6 +2018,14 @@ void gpgpu_sim::cycle() {
 
   if (clock_mask & DRAM) {
     for (unsigned i = 0; i < m_memory_config->m_n_mem; i++) {
+      mem_fetch *mf = (mem_fetch *)icnt_pop(
+          /* in_port = */ i,
+          /* l2Dram = */ true);
+      if (mf) {
+        // inject directly into the DRAM scheduling queue
+        m_memory_partition_unit[i]->push_to_dram(mf);
+      }
+
       if (m_memory_config->simple_dram_model)
         m_memory_partition_unit[i]->simple_dram_model_cycle();
       else
@@ -2051,7 +2065,17 @@ void gpgpu_sim::cycle() {
             (mem_fetch *)icnt_pop(m_shader_config->mem2device(i), false);
         // Push the Memory Request into the Memory Sub-Partition
         m_memory_sub_partition[i]->push(mf, gpu_sim_cycle + gpu_tot_sim_cycle);
-        if (mf) partiton_reqs_in_parallel_per_cycle++;
+        if (mf) {
+          unsigned in_port = i;
+          unsigned out_port =
+              i / m_memory_config->m_n_sub_partition_per_memory_channel;
+          unsigned sz = mf->size();
+          if (::icnt_has_buffer(in_port, sz, /* l2Dram */ true)) {
+            ::icnt_push(in_port, out_port, mf, sz, /* l2Dram */ true);
+          } else {
+            // gpu_stall_l2dram_icnt++;
+          }
+        }
       }
       // Execute Cache Cycle for the Memory Sub-Partition
       m_memory_sub_partition[i]->cache_cycle(gpu_sim_cycle + gpu_tot_sim_cycle);
