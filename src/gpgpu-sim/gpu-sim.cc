@@ -233,6 +233,8 @@ void power_config::reg_options(class OptionParser *opp) {
 }
 
 void memory_config::reg_options(class OptionParser *opp) {
+  option_parser_register(opp, "gpgpu_n_chiplets", OPT_UINT32, &n_chiplets,
+                         "Number of MCM chiplets", "1");
   option_parser_register(opp, "-gpgpu_perf_sim_memcpy", OPT_BOOL,
                          &m_perf_sim_memcpy, "Fill the L2 cache on memcpy",
                          "1");
@@ -669,9 +671,6 @@ void gpgpu_sim_config::reg_options(option_parser_t opp) {
   m_shader_config.reg_options(opp);
   m_memory_config.reg_options(opp);
   power_config::reg_options(opp);
-  option_parser_register(opp, "gpgpu_n_chiplets", OPT_UINT32,
-                         &m_memory_config.n_chiplets, "Number of MCM chiplets",
-                         "1");
   option_parser_register(opp, "-gpgpu_max_cycle", OPT_INT64, &gpu_max_cycle_opt,
                          "terminates gpu simulation early (0 = no limit)", "0");
   option_parser_register(opp, "-gpgpu_max_insn", OPT_INT64, &gpu_max_insn_opt,
