@@ -32,11 +32,11 @@
 #ifndef GPU_SIM_H
 #define GPU_SIM_H
 
+#include <stdint.h>
 #include <stdio.h>
 #include <fstream>
 #include <iostream>
 #include <list>
-#include <stdint.h>
 #include "../abstract_hardware_model.h"
 #include "../option_parser.h"
 #include "../trace.h"
@@ -335,6 +335,8 @@ class memory_config {
   enum dram_ctrl_t scheduler_type;
   bool gpgpu_memlatency_stat;
   unsigned m_n_mem;
+  // mcm
+  unsigned n_chiplets;
   unsigned m_n_sub_partition_per_memory_channel;
   unsigned m_n_mem_sub_partition;
   unsigned gpu_n_mem_per_ctrlr;
@@ -584,7 +586,6 @@ class gpgpu_sim : public gpgpu_t {
   unsigned finished_kernel();
   void set_kernel_done(kernel_info_t *kernel);
   void stop_all_running_kernels();
-
   void init();
   void cycle();
   bool active();
@@ -879,7 +880,7 @@ class sst_gpgpu_sim : public gpgpu_sim {
    * @param dst_start_addr
    * @param count
    */
-  void perf_memcpy_to_gpu(size_t dst_start_addr, size_t count){};
+  void perf_memcpy_to_gpu(size_t dst_start_addr, size_t count) {};
 
   /**
    * @brief Check if the SST config matches up with the

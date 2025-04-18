@@ -129,7 +129,7 @@ static void LocalInterconnect_create(unsigned int n_shader, unsigned int n_mem,
     g_localicnt_interface->CreateInterconnect(n_shader, n_mem);
 
   } else {
-    g_dram_l2_localicnt_interface = +LocalInterconnect::New(
+    g_dram_l2_localicnt_interface = LocalInterconnect::New(
         g_inct_config /* maybe same or separate config */);
     g_dram_l2_localicnt_interface->CreateInterconnect(n_shader, n_mem);
   }
