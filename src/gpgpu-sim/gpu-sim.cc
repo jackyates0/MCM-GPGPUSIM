@@ -233,6 +233,7 @@ void power_config::reg_options(class OptionParser *opp) {
 }
 
 void memory_config::reg_options(class OptionParser *opp) {
+  printf("IN mem config reg_options");
   option_parser_register(opp, "-gpgpu_n_chiplets", OPT_UINT32, &n_chiplets,
                          "Number of MCM chiplets", "1");
   option_parser_register(opp, "-gpgpu_perf_sim_memcpy", OPT_BOOL,
