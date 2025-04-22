@@ -41,7 +41,7 @@ typedef bool (*icnt_has_buffer_p)(unsigned input, unsigned int size,
 typedef void (*icnt_push_p)(unsigned input, unsigned output, void* data,
                             unsigned int size, bool l2dramICNT);
 typedef void* (*icnt_pop_p)(unsigned output, bool l2dramICNT);
-typedef void (*icnt_transfer_p)();
+typedef void (*icnt_transfer_p)(bool l2dramICNT);
 typedef bool (*icnt_busy_p)();
 typedef void (*icnt_drain_p)();
 typedef void (*icnt_display_stats_p)();

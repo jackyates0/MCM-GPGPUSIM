@@ -2075,7 +2075,7 @@ void gpgpu_sim::cycle() {
   }
 
   if (clock_mask & ICNT) {
-    icnt_transfer();
+    icnt_transfer(false);
   }
 
   if (clock_mask & CORE) {

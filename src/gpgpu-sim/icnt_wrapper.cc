@@ -92,13 +92,16 @@ static void intersim2_push(unsigned input, unsigned output, void* data,
 
 static void* intersim2_pop(unsigned output, bool l2DramIcnt) {
   if (l2DramIcnt) {
+    printf("IN HERERERERRERE\n");
     return dram_l2_inct_interface->Pop(output);
   } else {
     return g_icnt_interface->Pop(output);
   }
 }
 
-static void intersim2_transfer() {
+static void intersim2_transfer(bool l2DramIcnt) {
+  printf("intersim2 INTERCONNECT TRANSFER\n");
+
   dram_l2_inct_interface->Advance();
   g_icnt_interface->Advance();
 }
@@ -159,11 +162,16 @@ static void LocalInterconnect_push(unsigned input, unsigned output, void* data,
 static void* LocalInterconnect_pop(unsigned output, bool l2DramIcnt) {
   if (!l2DramIcnt)
     return g_localicnt_interface->Pop(output);
-  else
+  else {
     return g_dram_l2_localicnt_interface->Pop(output);
+  }
 }
 
-static void LocalInterconnect_transfer() { g_localicnt_interface->Advance(); }
+static void LocalInterconnect_transfer(bool l2DramIcnt) {
+  // printf("LOCAL INTERCONNECT TRANSFER\n");
+  g_localicnt_interface->Advance();
+  g_dram_l2_localicnt_interface->Advance();
+}
 
 static bool LocalInterconnect_busy() { return g_localicnt_interface->Busy(); }
 
