@@ -316,44 +316,100 @@ void memory_partition_unit::dram_cycle() {
   // pop completed memory request from dram and push it to dram-to-L2 queue
   // of the original sub partition
   // icnt_transfer(true);
-  if (mem_fetch *mf_remote = (mem_fetch *)::icnt_pop(
-          get_mpid() + m_config->m_n_mem, /*l2Dram=*/true)) {
-    printf(">>> popped a remote request\n");
-    dram_delay_t d;
-    d.req = mf_remote;
-    d.ready_cycle = m_gpu->gpu_sim_cycle + m_gpu->gpu_tot_sim_cycle +
-                    m_config->dram_latency;
-    m_dram_latency_queue.push_back(d);
-    mf_remote->set_status(IN_PARTITION_DRAM_LATENCY_QUEUE,
-                          m_gpu->gpu_sim_cycle + m_gpu->gpu_tot_sim_cycle);
-  } else {
-    // if (get_mpid() == 16) printf("NULL POP %d\n", get_mpid());
+  if (m_config->n_chiplets > 1) {
+    if (mem_fetch *mf_remote = (mem_fetch *)::icnt_pop(
+            get_mpid() + m_config->m_n_mem, /*l2Dram=*/true)) {
+      // printf(">>> popped a remote request\n");
+      dram_delay_t d;
+      d.req = mf_remote;
+      d.ready_cycle = m_gpu->gpu_sim_cycle + m_gpu->gpu_tot_sim_cycle +
+                      m_config->dram_latency * 8;
+      m_dram_latency_queue.push_back(d);
+      mf_remote->set_status(IN_PARTITION_DRAM_LATENCY_QUEUE,
+                            m_gpu->gpu_sim_cycle + m_gpu->gpu_tot_sim_cycle);
+    } else {
+      // if (get_mpid() == 16) printf("NULL POP %d\n", get_mpid());
+    }
+    // --- 2) Pull in any *remote* DRAM→L2 responses sent by other chiplets ---
+    if (mem_fetch *mf_ret_icnt = (mem_fetch *)::icnt_pop(get_mpid(), true)) {
+      printf(">>> popped a remote DRAM→L2 response\n");
+      unsigned dest_gspid = mf_ret_icnt->get_sub_partition_id();
+      int dest_spid = global_sub_partition_id_to_local_id(dest_gspid);
+      assert(m_sub_partition[dest_spid]->get_id() == dest_gspid);
+      // enqueue into my local dram→L2 queue
+      m_sub_partition[dest_spid]->dram_L2_queue_push(mf_ret_icnt);
+      mf_ret_icnt->set_status(IN_PARTITION_DRAM_TO_L2_QUEUE,
+                              m_gpu->gpu_sim_cycle + m_gpu->gpu_tot_sim_cycle);
+    }
   }
-  // need to check 
+
+  // need to check
   mem_fetch *mf_return = m_dram->return_queue_top();
   if (mf_return) {
+    // need to add interconnect direction from dram back to l2
     // determine local vs remote chiplet based on sm.
     // if remote push to interconnect..
     // output would be sm
-
+    // dest_global_spid = ID of the L2 sub-partition that
+    // this DRAM response needs to go back to
     unsigned dest_global_spid = mf_return->get_sub_partition_id();
     int dest_spid = global_sub_partition_id_to_local_id(dest_global_spid);
     assert(m_sub_partition[dest_spid]->get_id() == dest_global_spid);
-    if (!m_sub_partition[dest_spid]->dram_L2_queue_full()) {
-      if (mf_return->get_access_type() == L1_WRBK_ACC) {
-        m_sub_partition[dest_spid]->set_done(mf_return);
-        delete mf_return;
-      } else {
-        m_sub_partition[dest_spid]->dram_L2_queue_push(mf_return);
-        mf_return->set_status(IN_PARTITION_DRAM_TO_L2_QUEUE,
-                              m_gpu->gpu_sim_cycle + m_gpu->gpu_tot_sim_cycle);
-        m_arbitration_metadata.return_credit(dest_spid);
-        MEMPART_DPRINTF(
-            "mem_fetch request %p return from dram to sub partition %d\n",
-            mf_return, dest_spid);
+
+    // compute which chiplet this L2→DRAM request originated from
+    unsigned sm_id = mf_return->get_sid();
+    unsigned n_sms = m_gpu->get_config().num_cluster();
+    unsigned sms_per_chip = n_sms / m_config->n_chiplets;
+    unsigned sm_chiplet = sm_id / sms_per_chip;
+
+    // compute which chiplet this DRAM controller lives on
+    unsigned channels_per_chip = m_config->m_n_mem / m_config->n_chiplets;
+    unsigned my_chiplet = get_mpid() / channels_per_chip;
+    unsigned per_ch = m_config->m_n_sub_partition_per_memory_channel;
+    // which DRAM chiplet owns that L2 bank
+    unsigned dest_mp = dest_global_spid / per_ch;  // the DRAM chiplet ID
+    bool is_local = (dest_mp == get_mpid());
+
+    bool is_local_chip = is_local;
+    if (is_local_chip || m_config->n_chiplets == 1) {
+      if (!m_sub_partition[dest_spid]->dram_L2_queue_full()) {
+        if (mf_return->get_access_type() == L1_WRBK_ACC) {
+          m_sub_partition[dest_spid]->set_done(mf_return);
+          delete mf_return;
+        } else {
+          m_sub_partition[dest_spid]->dram_L2_queue_push(mf_return);
+          mf_return->set_status(
+              IN_PARTITION_DRAM_TO_L2_QUEUE,
+              m_gpu->gpu_sim_cycle + m_gpu->gpu_tot_sim_cycle);
+          m_arbitration_metadata.return_credit(dest_spid);
+          MEMPART_DPRINTF(
+              "mem_fetch request %p return from dram to sub partition %d\n",
+              mf_return, dest_spid);
+        }
+        m_dram->return_queue_pop();
       }
-      m_dram->return_queue_pop();
+    } else if (m_config->n_chiplets > 1) {
+      printf("Remote request fufilling!\n");
+      // this is wrong right now
+      unsigned per_ch = m_config->m_n_sub_partition_per_memory_channel;
+      unsigned dest_mp = dest_global_spid / per_ch;  // in [0…m_n_mem-1]
+      unsigned size = mf_return->get_is_write() ? mf_return->get_ctrl_size()
+                                                : mf_return->size();
+      if (::icnt_has_buffer(dest_mp, size, true)) {
+        mf_return->set_status(IN_ICNT_TO_SHADER,
+                              m_gpu->gpu_sim_cycle + m_gpu->gpu_tot_sim_cycle);
+        ::icnt_push(get_mpid() + m_config->m_n_mem, dest_mp, mf_return, size,
+                    true);
+        MEMPART_DPRINTF(
+            "mem_fetch %p returned remotely via ICNT to device %u\n", mf_return,
+            dest_mp);
+        m_dram->return_queue_pop();
+      } else {
+        //  ICNT—stall
+        printf("NO SPACE\n");
+      }
     }
+
   } else {
     m_dram->return_queue_pop();
   }
@@ -379,8 +435,8 @@ void memory_partition_unit::dram_cycle() {
       unsigned channels_per_chip = m_config->m_n_mem / m_config->n_chiplets;
       unsigned n_sms = m_gpu->get_config().num_cluster();
       unsigned sms_per_chip = n_sms / m_config->n_chiplets;
-      printf("chip_id %d sm_id %d n_sms %d sms_per_chip %d\n", chip_id,
-             mf->get_sid(), n_sms, sms_per_chip);
+      printf("chip_id %d sm_id %d n_sms %d sms_per_chip %d, getmpid %d\n",
+             chip_id, mf->get_sid(), n_sms, sms_per_chip, get_mpid());
 
       unsigned sm_id = mf->get_sid();
       unsigned dest_chip = chip_id / channels_per_chip;
@@ -393,8 +449,8 @@ void memory_partition_unit::dram_cycle() {
       unsigned sm_chiplet = sm_id / sms_per_chip;
 
       bool is_remote = (sm_chiplet != dest_chip);
-      if (is_remote) {
-        if (::icnt_has_buffer(get_mpid() + m_config->m_n_mem, mf->size(),
+      if (is_remote && m_config->n_chiplets > 1) {
+        if (::icnt_has_buffer(get_mpid(), mf->size(),
                               /* l2Dram */ true)) {
           printf("REMOTE ACCESS sm chiplet %d  dest chiplet %d\n", sm_chiplet,
                  dest_chip);

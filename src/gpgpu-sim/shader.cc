@@ -4619,6 +4619,30 @@ void simt_core_cluster::icnt_inject_request_packet(class mem_fetch *mf) {
   unsigned destination = mf->get_sub_partition_id();
   mf->set_status(IN_ICNT_TO_MEM,
                  m_gpu->gpu_sim_cycle + m_gpu->gpu_tot_sim_cycle);
+  // unsigned channels_per_chip = 32;
+  // unsigned sm_id = mf->get_sid();
+  // unsigned n_sms = m_gpu->get_config().num_cluster();
+
+  // printf(
+  //    "m_cluster_id %d,m_config->mem2device(destination) %d, destination %d, "
+  //    "c_per_chip %d destModulo %d,sm_id %d,n_sms %d\n",
+  //     m_cluster_id, m_config->mem2device(destination), destination,
+  //     channels_per_chip, destination % channels_per_chip, sm_id, n_sms);
+  // check for remote / local
+  // compute which chiplet this L2→DRAM request originated from
+  // unsigned sms_per_chip = n_sms / 2;
+  //  unsigned sm_chiplet = sm_id / sms_per_chip;
+
+  // compute which chiplet this DRAM controller lives on
+  // unsigned my_chiplet = mf->get_tlx_addr().chip / 16;
+
+  // bool is_local_chip = (sm_chiplet == my_chiplet);
+  // printf("islocal %d my_chip %d smChiplet %d\n", is_local_chip, my_chiplet,
+  //        sm_chiplet);
+  // if (!is_local_chip) {
+  // destination = destination % channels_per_chip;
+  // }
+  // printf("destitnation %d \n", destination);
   if (!mf->get_is_write() && !mf->isatomic())
     ::icnt_push(m_cluster_id, m_config->mem2device(destination), (void *)mf,
                 mf->get_ctrl_size(), false);
